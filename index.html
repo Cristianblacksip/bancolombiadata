@@ -7,26 +7,28 @@
 <style>
   :root {
     --bg: #f5f6f8; --card: #ffffff; --text: #1a1d23; --muted: #6b7280;
-    --border: #e5e7eb; --accent: #2563eb; --danger: #dc2626; --ok: #16a34a;
+    --border: #e5e7eb; --accent: #2563eb; --danger: #dc2626; --ok: #16a34a; --warn: #b45309;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
   header { padding: 24px 32px; background: var(--card); border-bottom: 1px solid var(--border); }
   header h1 { margin: 0 0 4px; font-size: 20px; }
   header p { margin: 0; color: var(--muted); font-size: 13px; }
-  .kpis { display: flex; gap: 16px; padding: 20px 32px; flex-wrap: wrap; }
-  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; min-width: 160px; }
+  h2.section { margin: 28px 32px 12px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .kpis { display: flex; gap: 16px; padding: 20px 32px 0; flex-wrap: wrap; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; min-width: 160px; flex: 1; }
   .kpi .num { font-size: 26px; font-weight: 700; }
   .kpi .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .kpi.danger .num { color: var(--danger); }
   .kpi.ok .num { color: var(--ok); }
+  .kpi.warn .num { color: var(--warn); }
   .controls { padding: 0 32px 12px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
   .controls input, .controls select {
     padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
   }
   .controls input { flex: 1; min-width: 220px; }
-  table-wrap { display: block; }
-  .table-wrap { margin: 0 32px 32px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: auto; max-height: 65vh; }
+  .table-wrap { margin: 0 32px 32px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: auto; max-height: 60vh; }
+  .table-wrap.small { max-height: 40vh; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
   th { position: sticky; top: 0; background: var(--card); cursor: pointer; user-select: none; }
@@ -52,6 +54,25 @@
 <div class="kpis" id="kpis"></div>
 <p class="updated" id="updatedAt"></p>
 
+<h2 class="section">Productos por línea y aliado</h2>
+<div class="controls">
+  <select id="filtroLineaDesglose"><option value="">Todas las líneas</option></select>
+</div>
+<div class="table-wrap small">
+  <table id="tablaDesglose">
+    <thead>
+      <tr>
+        <th data-key="linea">Línea</th>
+        <th data-key="aliado">Aliado</th>
+        <th data-key="total">Total productos</th>
+        <th data-key="no_actualizados">No actualizados</th>
+      </tr>
+    </thead>
+    <tbody id="tbodyDesglose"></tbody>
+  </table>
+</div>
+
+<h2 class="section">Detalle de productos</h2>
 <div class="controls">
   <input type="text" id="buscar" placeholder="Buscar por nombre o ID de producto…">
   <select id="filtroEstado">
@@ -60,6 +81,8 @@
     <option value="Catálogo">Catálogo</option>
     <option value="Oferta comercial (precio/stock)">Oferta comercial</option>
   </select>
+  <select id="filtroLinea"><option value="">Todas las líneas</option></select>
+  <select id="filtroAliado"><option value="">Todos los aliados</option></select>
 </div>
 
 <div class="table-wrap">
@@ -68,6 +91,8 @@
       <tr>
         <th data-key="product_id">ID</th>
         <th data-key="product_name">Nombre</th>
+        <th data-key="linea">Línea</th>
+        <th data-key="aliado">Aliado</th>
         <th data-key="que_se_actualizo">Estado</th>
         <th data-key="fecha_ultima_actualizacion">Última actualización</th>
         <th data-key="dias_desde_ultima_actualizacion">Días</th>
@@ -88,7 +113,9 @@
 <script>
 let allRows = [];
 let filtered = [];
+let desgloseData = [];
 let sortKey = null, sortDir = 1;
+let sortKeyDesglose = 'total', sortDirDesglose = -1;
 let page = 0;
 const PAGE_SIZE = 50;
 
@@ -96,12 +123,17 @@ fetch('data.json')
   .then(r => r.json())
   .then(payload => {
     allRows = payload.rows || [];
+    desgloseData = payload.desglose || [];
     filtered = allRows;
+
     document.getElementById('fuenteInfo').textContent =
       `${allRows.length.toLocaleString('es-CO')} productos — bancolombia.vtex_producto_actualizacion_inmoviliario`;
     document.getElementById('updatedAt').textContent =
       'Última actualización de datos: ' + (payload.meta?.generado_el || '—');
+
     renderKpis(payload.meta);
+    poblarSelectores();
+    renderDesglose();
     render();
   })
   .catch(err => {
@@ -111,21 +143,45 @@ fetch('data.json')
 function renderKpis(meta) {
   if (!meta) return;
   const kpis = document.getElementById('kpis');
+  const fmt = n => (n ?? '—').toLocaleString ? n.toLocaleString('es-CO') : n;
   kpis.innerHTML = `
-    <div class="kpi"><div class="num">${meta.total_productos?.toLocaleString('es-CO') ?? '—'}</div><div class="label">Total productos</div></div>
-    <div class="kpi danger"><div class="num">${meta.no_indexados?.toLocaleString('es-CO') ?? '—'}</div><div class="label">No indexados</div></div>
-    <div class="kpi danger"><div class="num">${meta.mas_30_dias_sin_actualizar?.toLocaleString('es-CO') ?? '—'}</div><div class="label">+30 días sin actualizar</div></div>
-    <div class="kpi ok"><div class="num">${meta.actualizados_ultimos_5_dias?.toLocaleString('es-CO') ?? '—'}</div><div class="label">Actualizados últimos 5 días</div></div>
+    <div class="kpi"><div class="num">${fmt(meta.total_productos)}</div><div class="label">Productos totales</div></div>
+    <div class="kpi ok"><div class="num">${fmt(meta.actualizados)}</div><div class="label">Actualizados (${meta.porcentaje_indexado ?? '—'}%)</div></div>
+    <div class="kpi danger"><div class="num">${fmt(meta.no_actualizados)}</div><div class="label">No actualizados / no indexados</div></div>
+    <div class="kpi"><div class="num">${fmt(meta.numero_aliados)}</div><div class="label">Aliados distintos</div></div>
+    <div class="kpi"><div class="num">${fmt(meta.numero_lineas)}</div><div class="label">Líneas distintas</div></div>
+    <div class="kpi warn"><div class="num">${fmt(meta.actualizados_menos_8_dias)}</div><div class="label">Actualizados hace &lt;8 días</div></div>
+    <div class="kpi"><div class="num">${meta.top_aliado_nombre ?? '—'}</div><div class="label">Aliado con más productos (${fmt(meta.top_aliado_total)})</div></div>
   `;
+}
+
+function poblarSelectores() {
+  const lineas = [...new Set(allRows.map(r => r.linea).filter(Boolean))].sort();
+  const aliados = [...new Set(allRows.map(r => r.aliado).filter(Boolean))].sort();
+
+  const selLinea = document.getElementById('filtroLinea');
+  const selLineaDesglose = document.getElementById('filtroLineaDesglose');
+  const selAliado = document.getElementById('filtroAliado');
+
+  lineas.forEach(l => {
+    selLinea.insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
+    selLineaDesglose.insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
+  });
+  aliados.forEach(a => selAliado.insertAdjacentHTML('beforeend', `<option value="${a}">${a}</option>`));
 }
 
 function applyFilters() {
   const q = document.getElementById('buscar').value.trim().toLowerCase();
   const estado = document.getElementById('filtroEstado').value;
+  const linea = document.getElementById('filtroLinea').value;
+  const aliado = document.getElementById('filtroAliado').value;
+
   filtered = allRows.filter(r => {
     const matchQ = !q || (r.product_name || '').toLowerCase().includes(q) || String(r.product_id).includes(q);
     const matchEstado = !estado || r.que_se_actualizo === estado;
-    return matchQ && matchEstado;
+    const matchLinea = !linea || r.linea === linea;
+    const matchAliado = !aliado || r.aliado === aliado;
+    return matchQ && matchEstado && matchLinea && matchAliado;
   });
   page = 0;
   render();
@@ -133,8 +189,11 @@ function applyFilters() {
 
 document.getElementById('buscar').addEventListener('input', applyFilters);
 document.getElementById('filtroEstado').addEventListener('change', applyFilters);
+document.getElementById('filtroLinea').addEventListener('change', applyFilters);
+document.getElementById('filtroAliado').addEventListener('change', applyFilters);
+document.getElementById('filtroLineaDesglose').addEventListener('change', renderDesglose);
 
-document.querySelectorAll('th[data-key]').forEach(th => {
+document.querySelectorAll('#tabla th[data-key]').forEach(th => {
   th.addEventListener('click', () => {
     const key = th.dataset.key;
     sortDir = (sortKey === key) ? -sortDir : 1;
@@ -145,6 +204,15 @@ document.querySelectorAll('th[data-key]').forEach(th => {
       return String(va).localeCompare(String(vb)) * sortDir;
     });
     render();
+  });
+});
+
+document.querySelectorAll('#tablaDesglose th[data-key]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    sortDirDesglose = (sortKeyDesglose === key) ? -sortDirDesglose : 1;
+    sortKeyDesglose = key;
+    renderDesglose();
   });
 });
 
@@ -160,6 +228,26 @@ function badge(estado) {
   return estado || '—';
 }
 
+function renderDesglose() {
+  const filtroLinea = document.getElementById('filtroLineaDesglose').value;
+  let data = filtroLinea ? desgloseData.filter(d => d.linea === filtroLinea) : desgloseData;
+
+  data = [...data].sort((a, b) => {
+    const va = a[sortKeyDesglose], vb = b[sortKeyDesglose];
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sortDirDesglose;
+    return String(va).localeCompare(String(vb)) * sortDirDesglose;
+  });
+
+  document.getElementById('tbodyDesglose').innerHTML = data.map(d => `
+    <tr>
+      <td>${d.linea}</td>
+      <td>${d.aliado}</td>
+      <td>${d.total.toLocaleString('es-CO')}</td>
+      <td>${d.no_actualizados.toLocaleString('es-CO')}</td>
+    </tr>
+  `).join('');
+}
+
 function render() {
   const tbody = document.getElementById('tbody');
   const start = page * PAGE_SIZE;
@@ -169,6 +257,8 @@ function render() {
     <tr>
       <td>${r.product_id ?? ''}</td>
       <td>${r.product_name ?? '—'}</td>
+      <td>${r.linea ?? '—'}</td>
+      <td>${r.aliado ?? '—'}</td>
       <td>${badge(r.que_se_actualizo)}</td>
       <td>${r.fecha_ultima_actualizacion ?? '—'}</td>
       <td>${r.dias_desde_ultima_actualizacion ?? '—'}</td>
