@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reporte de Indexación VTEX — Bancolombia</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1a1d23; --muted: #6b7280;
+    --border: #e5e7eb; --accent: #2563eb; --danger: #dc2626; --ok: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 24px 32px; background: var(--card); border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .kpis { display: flex; gap: 16px; padding: 20px 32px; flex-wrap: wrap; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; min-width: 160px; }
+  .kpi .num { font-size: 26px; font-weight: 700; }
+  .kpi .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .kpi.danger .num { color: var(--danger); }
+  .kpi.ok .num { color: var(--ok); }
+  .controls { padding: 0 32px 12px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .controls input, .controls select {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+  }
+  .controls input { flex: 1; min-width: 220px; }
+  table-wrap { display: block; }
+  .table-wrap { margin: 0 32px 32px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: auto; max-height: 65vh; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--card); cursor: pointer; user-select: none; }
+  th:hover { background: #f0f1f3; }
+  tr:hover td { background: #fafbfc; }
+  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.no-indexado { background: #fee2e2; color: var(--danger); }
+  .badge.catalogo { background: #dbeafe; color: var(--accent); }
+  .badge.oferta { background: #fef3c7; color: #92400e; }
+  .pager { display: flex; gap: 8px; align-items: center; padding: 12px 32px 32px; font-size: 13px; color: var(--muted); }
+  .pager button { padding: 6px 12px; border: 1px solid var(--border); background: var(--card); border-radius: 6px; cursor: pointer; }
+  .pager button:disabled { opacity: .4; cursor: default; }
+  .updated { font-size: 12px; color: var(--muted); padding: 0 32px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Reporte de Indexación — Productos y SKUs VTEX</h1>
+  <p id="fuenteInfo">Cargando…</p>
+</header>
+
+<div class="kpis" id="kpis"></div>
+<p class="updated" id="updatedAt"></p>
+
+<div class="controls">
+  <input type="text" id="buscar" placeholder="Buscar por nombre o ID de producto…">
+  <select id="filtroEstado">
+    <option value="">Todos los estados</option>
+    <option value="No indexado">No indexado</option>
+    <option value="Catálogo">Catálogo</option>
+    <option value="Oferta comercial (precio/stock)">Oferta comercial</option>
+  </select>
+</div>
+
+<div class="table-wrap">
+  <table id="tabla">
+    <thead>
+      <tr>
+        <th data-key="product_id">ID</th>
+        <th data-key="product_name">Nombre</th>
+        <th data-key="que_se_actualizo">Estado</th>
+        <th data-key="fecha_ultima_actualizacion">Última actualización</th>
+        <th data-key="dias_desde_ultima_actualizacion">Días</th>
+        <th data-key="is_active">Activo</th>
+        <th data-key="is_visible">Visible</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="pager">
+  <button id="prevPage">← Anterior</button>
+  <span id="pageInfo"></span>
+  <button id="nextPage">Siguiente →</button>
+</div>
+
+<script>
+let allRows = [];
+let filtered = [];
+let sortKey = null, sortDir = 1;
+let page = 0;
+const PAGE_SIZE = 50;
+
+fetch('data.json')
+  .then(r => r.json())
+  .then(payload => {
+    allRows = payload.rows || [];
+    filtered = allRows;
+    document.getElementById('fuenteInfo').textContent =
+      `${allRows.length.toLocaleString('es-CO')} productos — bancolombia.vtex_producto_actualizacion_inmoviliario`;
+    document.getElementById('updatedAt').textContent =
+      'Última actualización de datos: ' + (payload.meta?.generado_el || '—');
+    renderKpis(payload.meta);
+    render();
+  })
+  .catch(err => {
+    document.getElementById('fuenteInfo').textContent = 'Error cargando data.json: ' + err;
+  });
+
+function renderKpis(meta) {
+  if (!meta) return;
+  const kpis = document.getElementById('kpis');
+  kpis.innerHTML = `
+    <div class="kpi"><div class="num">${meta.total_productos?.toLocaleString('es-CO') ?? '—'}</div><div class="label">Total productos</div></div>
+    <div class="kpi danger"><div class="num">${meta.no_indexados?.toLocaleString('es-CO') ?? '—'}</div><div class="label">No indexados</div></div>
+    <div class="kpi danger"><div class="num">${meta.mas_30_dias_sin_actualizar?.toLocaleString('es-CO') ?? '—'}</div><div class="label">+30 días sin actualizar</div></div>
+    <div class="kpi ok"><div class="num">${meta.actualizados_ultimos_5_dias?.toLocaleString('es-CO') ?? '—'}</div><div class="label">Actualizados últimos 5 días</div></div>
+  `;
+}
+
+function applyFilters() {
+  const q = document.getElementById('buscar').value.trim().toLowerCase();
+  const estado = document.getElementById('filtroEstado').value;
+  filtered = allRows.filter(r => {
+    const matchQ = !q || (r.product_name || '').toLowerCase().includes(q) || String(r.product_id).includes(q);
+    const matchEstado = !estado || r.que_se_actualizo === estado;
+    return matchQ && matchEstado;
+  });
+  page = 0;
+  render();
+}
+
+document.getElementById('buscar').addEventListener('input', applyFilters);
+document.getElementById('filtroEstado').addEventListener('change', applyFilters);
+
+document.querySelectorAll('th[data-key]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    sortDir = (sortKey === key) ? -sortDir : 1;
+    sortKey = key;
+    filtered.sort((a, b) => {
+      const va = a[key] ?? '', vb = b[key] ?? '';
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sortDir;
+      return String(va).localeCompare(String(vb)) * sortDir;
+    });
+    render();
+  });
+});
+
+document.getElementById('prevPage').addEventListener('click', () => { if (page > 0) { page--; render(); } });
+document.getElementById('nextPage').addEventListener('click', () => {
+  if ((page + 1) * PAGE_SIZE < filtered.length) { page++; render(); }
+});
+
+function badge(estado) {
+  if (estado === 'No indexado') return `<span class="badge no-indexado">No indexado</span>`;
+  if (estado === 'Catálogo') return `<span class="badge catalogo">Catálogo</span>`;
+  if (estado === 'Oferta comercial (precio/stock)') return `<span class="badge oferta">Oferta</span>`;
+  return estado || '—';
+}
+
+function render() {
+  const tbody = document.getElementById('tbody');
+  const start = page * PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(r => `
+    <tr>
+      <td>${r.product_id ?? ''}</td>
+      <td>${r.product_name ?? '—'}</td>
+      <td>${badge(r.que_se_actualizo)}</td>
+      <td>${r.fecha_ultima_actualizacion ?? '—'}</td>
+      <td>${r.dias_desde_ultima_actualizacion ?? '—'}</td>
+      <td>${r.is_active === 1 ? 'Sí' : (r.is_active === 0 ? 'No' : '—')}</td>
+      <td>${r.is_visible === 1 ? 'Sí' : (r.is_visible === 0 ? 'No' : '—')}</td>
+    </tr>
+  `).join('');
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  document.getElementById('pageInfo').textContent = `Página ${page + 1} de ${totalPages} — ${filtered.length.toLocaleString('es-CO')} resultados`;
+  document.getElementById('prevPage').disabled = page === 0;
+  document.getElementById('nextPage').disabled = (page + 1) >= totalPages;
+}
+</script>
+
+</body>
+</html>
