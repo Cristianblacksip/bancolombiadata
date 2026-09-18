@@ -2,277 +2,554 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Reporte de Indexación VTEX — Bancolombia</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor de Actualización de Catálogo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
-  :root {
-    --bg: #f5f6f8; --card: #ffffff; --text: #1a1d23; --muted: #6b7280;
-    --border: #e5e7eb; --accent: #2563eb; --danger: #dc2626; --ok: #16a34a; --warn: #b45309;
+  :root{
+    --bg: #10161c;
+    --panel: #171f27;
+    --panel-2: #1c252e;
+    --border: #29343e;
+    --text: #e7edf1;
+    --text-muted: #8fa3ae;
+    --text-faint: #5f7480;
+    --fresh: #49d3ac;
+    --aging: #e5a83f;
+    --stale: #e8635f;
+    --line-a: #6fb1e0;
+    --line-b: #8f8fe0;
+    --radius: 3px;
+    font-family: 'Space Grotesk', sans-serif;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
-  header { padding: 24px 32px; background: var(--card); border-bottom: 1px solid var(--border); }
-  header h1 { margin: 0 0 4px; font-size: 20px; }
-  header p { margin: 0; color: var(--muted); font-size: 13px; }
-  h2.section { margin: 28px 32px 12px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .kpis { display: flex; gap: 16px; padding: 20px 32px 0; flex-wrap: wrap; }
-  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; min-width: 160px; flex: 1; }
-  .kpi .num { font-size: 26px; font-weight: 700; }
-  .kpi .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .kpi.danger .num { color: var(--danger); }
-  .kpi.ok .num { color: var(--ok); }
-  .kpi.warn .num { color: var(--warn); }
-  .controls { padding: 0 32px 12px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-  .controls input, .controls select {
-    padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  .controls input { flex: 1; min-width: 220px; }
-  .table-wrap { margin: 0 32px 32px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: auto; max-height: 60vh; }
-  .table-wrap.small { max-height: 40vh; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th { position: sticky; top: 0; background: var(--card); cursor: pointer; user-select: none; }
-  th:hover { background: #f0f1f3; }
-  tr:hover td { background: #fafbfc; }
-  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-  .badge.no-indexado { background: #fee2e2; color: var(--danger); }
-  .badge.catalogo { background: #dbeafe; color: var(--accent); }
-  .badge.oferta { background: #fef3c7; color: #92400e; }
-  .pager { display: flex; gap: 8px; align-items: center; padding: 12px 32px 32px; font-size: 13px; color: var(--muted); }
-  .pager button { padding: 6px 12px; border: 1px solid var(--border); background: var(--card); border-radius: 6px; cursor: pointer; }
-  .pager button:disabled { opacity: .4; cursor: default; }
-  .updated { font-size: 12px; color: var(--muted); padding: 0 32px; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  ::selection{ background: var(--fresh); color:#0a1210; }
+
+  a{ color: inherit; }
+
+  header.top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap: 24px;
+    padding: 22px clamp(16px,4vw,40px);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header.top .brand{ display:flex; flex-direction:column; gap:4px; }
+  header.top h1{ margin:0; font-size: 20px; font-weight:600; letter-spacing:-0.01em; }
+  header.top p{ margin:0; color: var(--text-muted); font-size: 13px; }
+  header.top .ref{ text-align:right; font-size:12px; color: var(--text-muted); }
+  header.top .ref .date{ color: var(--text); font-size:14px; }
+
+  .layout{ display:grid; grid-template-columns: 240px 1fr; gap: 0; min-height: calc(100vh - 78px); }
+  @media (max-width: 860px){ .layout{ grid-template-columns: 1fr; } }
+
+  aside{
+    border-right: 1px solid var(--border);
+    padding: 24px 18px;
+    display:flex; flex-direction:column; gap: 26px;
+    position: sticky; top:0; align-self:start;
+    height: calc(100vh - 78px);
+    overflow-y:auto;
+  }
+  @media (max-width: 860px){
+    aside{ position:static; height:auto; border-right:none; border-bottom:1px solid var(--border); }
+  }
+  .filter-group{ display:flex; flex-direction:column; gap:10px; }
+  .filter-group > label{
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-faint); font-weight:600;
+  }
+  select, input[type=range]{ width:100%; }
+  select{
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: var(--radius); font-family: inherit; font-size: 13px;
+  }
+  .chip-list{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    font-size: 12px; padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text-muted); cursor:pointer; user-select:none;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .chip.active{ border-color: var(--fresh); color: #0a1210; background: var(--fresh); font-weight:600; }
+  .threshold-row{ display:flex; align-items:center; justify-content:space-between; }
+  .threshold-row .val{ font-size:13px; color: var(--fresh); font-weight:600; }
+  input[type=range]{ -webkit-appearance:none; height:3px; background: var(--border); border-radius:2px; outline:none; }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background: var(--fresh); cursor:pointer; border: 2px solid #0a1210;
+  }
+  .reset-btn{
+    margin-top: auto; background:none; border: 1px solid var(--border); color: var(--text-muted);
+    font-family: inherit; font-size: 12px; padding: 9px; border-radius: var(--radius);
+    cursor:pointer; transition: border-color .15s, color .15s;
+  }
+  .reset-btn:hover{ border-color: var(--text-muted); color: var(--text); }
+
+  .legend-note{ font-size:11px; color: var(--text-faint); line-height:1.5; }
+  .legend-note .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; }
+
+  main{ padding: 24px clamp(16px,4vw,40px) 60px; }
+
+  .kpi-row{
+    display:grid; grid-template-columns: repeat(5, 1fr); gap: 1px;
+    background: var(--border); border: 1px solid var(--border); margin-bottom: 28px;
+  }
+  @media (max-width: 900px){ .kpi-row{ grid-template-columns: repeat(2,1fr); } }
+  .kpi{ background: var(--panel); padding: 18px 20px; }
+  .kpi .label{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color: var(--text-faint); margin-bottom:10px; }
+  .kpi .value{ font-family:'IBM Plex Mono', monospace; font-size: 26px; font-weight:600; }
+  .kpi .value small{ font-size:14px; color: var(--text-muted); font-weight:400; }
+  .kpi .sub{ margin-top:6px; font-size:12px; color: var(--text-muted); }
+
+  section{ margin-bottom: 34px; }
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 14px; gap: 12px; flex-wrap:wrap; }
+  .section-head h2{ margin:0; font-size:15px; font-weight:600; }
+  .section-head .hint{ font-size:12px; color: var(--text-faint); }
+
+  .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px){ .grid-2{ grid-template-columns: 1fr; } }
+
+  .panel{ background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .chart-wrap{ height: 260px; position:relative; }
+
+  table{ width:100%; border-collapse: collapse; font-size: 13px; }
+  th, td{ text-align:left; padding: 9px 10px; border-bottom: 1px solid var(--border); white-space:nowrap; }
+  th{
+    font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color: var(--text-faint); font-weight:600; position:sticky; top:0; background:var(--panel);
+  }
+  tbody tr:hover{ background: var(--panel-2); }
+  td.num, th.num{ text-align:right; font-family:'IBM Plex Mono', monospace; }
+  .table-scroll{ overflow: auto; max-height: 420px; }
+
+  .status-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:7px; }
+  .bar-track{
+    width:70px; height:6px; background: var(--border); border-radius:4px; overflow:hidden;
+    display:inline-block; vertical-align:middle; margin-right:8px;
+  }
+  .bar-fill{ height:100%; border-radius:4px; }
+  .rank-num{ color: var(--text-faint); font-family:'IBM Plex Mono', monospace; font-size:12px; width:16px; }
+
+  .pill{ font-size:11px; padding: 2px 8px; border-radius: 20px; font-weight:600; display:inline-block; }
+  .pill.si{ background: rgba(73,211,172,.14); color: var(--fresh); }
+  .pill.no{ background: rgba(232,99,95,.14); color: var(--stale); }
+
+  .empty{ padding: 30px; text-align:center; color: var(--text-faint); font-size:13px; }
+
+  input[type=text]{
+    background: var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:7px 10px; border-radius: var(--radius); font-family: inherit; font-size:13px; width: 220px;
+  }
+  footer{ padding: 20px clamp(16px,4vw,40px) 40px; color: var(--text-faint); font-size:12px; border-top:1px solid var(--border); }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Reporte de Indexación — Productos y SKUs VTEX</h1>
-  <p id="fuenteInfo">Cargando…</p>
+<header class="top">
+  <div class="brand">
+    <h1>Monitor de Actualización de Catálogo</h1>
+    <p>Frescura de productos por aliado y línea — bancolombia.vtex_producto_actualizacion_inmoviliario</p>
+  </div>
+  <div class="ref">
+    <div>Datos generados el</div>
+    <div class="date mono" id="refDate">—</div>
+  </div>
 </header>
 
-<div class="kpis" id="kpis"></div>
-<p class="updated" id="updatedAt"></p>
+<div class="layout">
+  <aside>
+    <div class="filter-group">
+      <label>Línea</label>
+      <select id="filterLinea"></select>
+    </div>
 
-<h2 class="section">Productos por línea y aliado</h2>
-<div class="controls">
-  <select id="filtroLineaDesglose"><option value="">Todas las líneas</option></select>
-</div>
-<div class="table-wrap small">
-  <table id="tablaDesglose">
-    <thead>
-      <tr>
-        <th data-key="linea">Línea</th>
-        <th data-key="aliado">Aliado</th>
-        <th data-key="total">Total productos</th>
-        <th data-key="no_actualizados">No actualizados</th>
-      </tr>
-    </thead>
-    <tbody id="tbodyDesglose"></tbody>
-  </table>
+    <div class="filter-group">
+      <label>Aliados</label>
+      <div class="chip-list" id="aliadoChips"></div>
+    </div>
+
+    <div class="filter-group">
+      <label>Umbral de frescura</label>
+      <div class="threshold-row">
+        <span style="font-size:12px;color:var(--text-muted)">Actualizado en los últimos</span>
+        <span class="val mono" id="thresholdVal">7 días</span>
+      </div>
+      <input type="range" id="thresholdSlider" min="1" max="60" value="7">
+    </div>
+
+    <div class="legend-note">
+      <div><span class="status-dot" style="background:var(--fresh)"></span>Al día — dentro del umbral</div>
+      <div><span class="status-dot" style="background:var(--aging)"></span>Por vencer — hasta 2× el umbral</div>
+      <div><span class="status-dot" style="background:var(--stale)"></span>Desactualizado / no indexado</div>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">Restablecer filtros</button>
+  </aside>
+
+  <main>
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="label">Productos filtrados</div>
+        <div class="value mono" id="kpiTotal">—</div>
+        <div class="sub" id="kpiTotalSub">&nbsp;</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Aliados activos</div>
+        <div class="value mono" id="kpiAliados">—</div>
+        <div class="sub" id="kpiAliadosSub">&nbsp;</div>
+      </div>
+      <div class="kpi">
+        <div class="label">% al día</div>
+        <div class="value mono" id="kpiFresco">—</div>
+        <div class="sub" id="kpiFrescoSub">&nbsp;</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Desactualizados</div>
+        <div class="value mono" id="kpiStale">—</div>
+        <div class="sub" id="kpiStaleSub">&nbsp;</div>
+      </div>
+      <div class="kpi">
+        <div class="label">No indexados</div>
+        <div class="value mono" id="kpiNoIndexado">—</div>
+        <div class="sub" id="kpiNoIndexadoSub">&nbsp;</div>
+      </div>
+    </div>
+
+    <section class="grid-2">
+      <div class="panel">
+        <div class="section-head"><h2>Productos por línea</h2></div>
+        <div class="chart-wrap"><canvas id="chartLinea"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="section-head"><h2>Productos por aliado</h2></div>
+        <div class="chart-wrap"><canvas id="chartAliado"></canvas></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Ranking de aliados por frescura</h2>
+        <span class="hint">Ordenado por % de productos al día, según el umbral definido</span>
+      </div>
+      <div class="panel" style="padding:0;">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:34px">#</th>
+                <th>Aliado</th>
+                <th class="num">Productos</th>
+                <th style="min-width:150px">% al día</th>
+                <th class="num">Al día</th>
+                <th class="num">Desactualizados</th>
+                <th>Última actualización</th>
+                <th class="num">Antigüedad prom. (días)</th>
+              </tr>
+            </thead>
+            <tbody id="rankingBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Detalle por producto</h2>
+        <input type="text" id="searchInput" placeholder="Buscar producto o aliado…">
+      </div>
+      <div class="panel" style="padding:0;">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Aliado</th>
+                <th>Línea</th>
+                <th>Qué se actualizó</th>
+                <th>Última actualización</th>
+                <th>Activo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="productsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
 </div>
 
-<h2 class="section">Detalle de productos</h2>
-<div class="controls">
-  <input type="text" id="buscar" placeholder="Buscar por nombre o ID de producto…">
-  <select id="filtroEstado">
-    <option value="">Todos los estados</option>
-    <option value="No indexado">No indexado</option>
-    <option value="Catálogo">Catálogo</option>
-    <option value="Oferta comercial (precio/stock)">Oferta comercial</option>
-  </select>
-  <select id="filtroLinea"><option value="">Todas las líneas</option></select>
-  <select id="filtroAliado"><option value="">Todos los aliados</option></select>
-</div>
-
-<div class="table-wrap">
-  <table id="tabla">
-    <thead>
-      <tr>
-        <th data-key="product_id">ID</th>
-        <th data-key="product_name">Nombre</th>
-        <th data-key="linea">Línea</th>
-        <th data-key="aliado">Aliado</th>
-        <th data-key="que_se_actualizo">Estado</th>
-        <th data-key="fecha_ultima_actualizacion">Última actualización</th>
-        <th data-key="dias_desde_ultima_actualizacion">Días</th>
-        <th data-key="is_active">Activo</th>
-        <th data-key="is_visible">Visible</th>
-      </tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
-</div>
-
-<div class="pager">
-  <button id="prevPage">← Anterior</button>
-  <span id="pageInfo"></span>
-  <button id="nextPage">Siguiente →</button>
-</div>
+<footer>
+  Datos cargados desde <span class="mono">data.json</span>, generado automáticamente por el flujo n8n. Se actualiza solo — no requiere subir archivos manualmente.
+</footer>
 
 <script>
-let allRows = [];
-let filtered = [];
-let desgloseData = [];
-let sortKey = null, sortDir = 1;
-let sortKeyDesglose = 'total', sortDirDesglose = -1;
-let page = 0;
-const PAGE_SIZE = 50;
+(function(){
+  "use strict";
 
-fetch('data.json')
-  .then(r => r.json())
-  .then(payload => {
-    allRows = payload.rows || [];
-    desgloseData = payload.desglose || [];
-    filtered = allRows;
+  const COLORS = { fresh: '#49d3ac', aging: '#e5a83f', stale: '#e8635f', lineA: '#6fb1e0', lineB: '#8f8fe0' };
 
-    document.getElementById('fuenteInfo').textContent =
-      `${allRows.length.toLocaleString('es-CO')} productos — bancolombia.vtex_producto_actualizacion_inmoviliario`;
-    document.getElementById('updatedAt').textContent =
-      'Última actualización de datos: ' + (payload.meta?.generado_el || '—');
+  let RAW = [];
+  let state = { linea: 'Todas', aliados: new Set(), threshold: 7, search: '' };
+  let allAliados = [];
+  let allLineas = [];
+  let generadoEl = null;
 
-    renderKpis(payload.meta);
-    poblarSelectores();
-    renderDesglose();
-    render();
-  })
-  .catch(err => {
-    document.getElementById('fuenteInfo').textContent = 'Error cargando data.json: ' + err;
-  });
+  // fecha_ultima_actualizacion llega en formato ISO "YYYY-MM-DD" (o null)
+  function parseFechaIso(str){
+    if(!str) return null;
+    const [y,m,d] = str.split('-').map(Number);
+    if(!y || !m || !d) return null;
+    return new Date(y, m-1, d);
+  }
+  function fmtDate(dt){
+    if(!dt) return '—';
+    const d = String(dt.getDate()).padStart(2,'0');
+    const m = String(dt.getMonth()+1).padStart(2,'0');
+    return `${d}/${m}/${dt.getFullYear()}`;
+  }
 
-function renderKpis(meta) {
-  if (!meta) return;
-  const kpis = document.getElementById('kpis');
-  const fmt = n => (n ?? '—').toLocaleString ? n.toLocaleString('es-CO') : n;
-  kpis.innerHTML = `
-    <div class="kpi"><div class="num">${fmt(meta.total_productos)}</div><div class="label">Productos totales</div></div>
-    <div class="kpi ok"><div class="num">${fmt(meta.actualizados)}</div><div class="label">Actualizados (${meta.porcentaje_indexado ?? '—'}%)</div></div>
-    <div class="kpi danger"><div class="num">${fmt(meta.no_actualizados)}</div><div class="label">No actualizados / no indexados</div></div>
-    <div class="kpi"><div class="num">${fmt(meta.numero_aliados)}</div><div class="label">Aliados distintos</div></div>
-    <div class="kpi"><div class="num">${fmt(meta.numero_lineas)}</div><div class="label">Líneas distintas</div></div>
-    <div class="kpi warn"><div class="num">${fmt(meta.actualizados_menos_8_dias)}</div><div class="label">Actualizados hace &lt;8 días</div></div>
-    <div class="kpi"><div class="num">${meta.top_aliado_nombre ?? '—'}</div><div class="label">Aliado con más productos (${fmt(meta.top_aliado_total)})</div></div>
-  `;
-}
+  fetch('data.json')
+    .then(r => {
+      if(!r.ok) throw new Error('No se pudo cargar data.json');
+      return r.json();
+    })
+    .then(payload => {
+      generadoEl = payload.meta?.generado_el || null;
 
-function poblarSelectores() {
-  const lineas = [...new Set(allRows.map(r => r.linea).filter(Boolean))].sort();
-  const aliados = [...new Set(allRows.map(r => r.aliado).filter(Boolean))].sort();
+      RAW = (payload.rows || []).map(row => ({
+        product_id: row.product_id,
+        product_name: (row.product_name || 'Sin nombre').trim(),
+        is_active: row.is_active,
+        is_visible: row.is_visible,
+        que_se_actualizo: row.que_se_actualizo || '—',
+        fecha: parseFechaIso(row.fecha_ultima_actualizacion),
+        dias: row.dias_desde_ultima_actualizacion, // ya calculado por SQL con DATEDIFF
+        aliado: row.aliado || 'Sin aliado',
+        linea: row.linea || 'Sin línea',
+        noIndexado: row.que_se_actualizo === 'No indexado'
+      })).filter(r => r.product_id);
 
-  const selLinea = document.getElementById('filtroLinea');
-  const selLineaDesglose = document.getElementById('filtroLineaDesglose');
-  const selAliado = document.getElementById('filtroAliado');
+      allAliados = [...new Set(RAW.map(r => r.aliado))].sort();
+      allLineas = [...new Set(RAW.map(r => r.linea))].sort();
 
-  lineas.forEach(l => {
-    selLinea.insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
-    selLineaDesglose.insertAdjacentHTML('beforeend', `<option value="${l}">${l}</option>`);
-  });
-  aliados.forEach(a => selAliado.insertAdjacentHTML('beforeend', `<option value="${a}">${a}</option>`));
-}
-
-function applyFilters() {
-  const q = document.getElementById('buscar').value.trim().toLowerCase();
-  const estado = document.getElementById('filtroEstado').value;
-  const linea = document.getElementById('filtroLinea').value;
-  const aliado = document.getElementById('filtroAliado').value;
-
-  filtered = allRows.filter(r => {
-    const matchQ = !q || (r.product_name || '').toLowerCase().includes(q) || String(r.product_id).includes(q);
-    const matchEstado = !estado || r.que_se_actualizo === estado;
-    const matchLinea = !linea || r.linea === linea;
-    const matchAliado = !aliado || r.aliado === aliado;
-    return matchQ && matchEstado && matchLinea && matchAliado;
-  });
-  page = 0;
-  render();
-}
-
-document.getElementById('buscar').addEventListener('input', applyFilters);
-document.getElementById('filtroEstado').addEventListener('change', applyFilters);
-document.getElementById('filtroLinea').addEventListener('change', applyFilters);
-document.getElementById('filtroAliado').addEventListener('change', applyFilters);
-document.getElementById('filtroLineaDesglose').addEventListener('change', renderDesglose);
-
-document.querySelectorAll('#tabla th[data-key]').forEach(th => {
-  th.addEventListener('click', () => {
-    const key = th.dataset.key;
-    sortDir = (sortKey === key) ? -sortDir : 1;
-    sortKey = key;
-    filtered.sort((a, b) => {
-      const va = a[key] ?? '', vb = b[key] ?? '';
-      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sortDir;
-      return String(va).localeCompare(String(vb)) * sortDir;
+      buildFilters();
+      render();
+    })
+    .catch(err => {
+      document.getElementById('rankingBody').innerHTML =
+        `<tr><td colspan="8" class="empty">${err.message}. Verifique que data.json esté junto a index.html.</td></tr>`;
     });
-    render();
-  });
-});
 
-document.querySelectorAll('#tablaDesglose th[data-key]').forEach(th => {
-  th.addEventListener('click', () => {
-    const key = th.dataset.key;
-    sortDirDesglose = (sortKeyDesglose === key) ? -sortDirDesglose : 1;
-    sortKeyDesglose = key;
-    renderDesglose();
-  });
-});
+  function buildFilters(){
+    document.getElementById('refDate').textContent = generadoEl ? fmtDate(parseFechaIso(generadoEl)) : '—';
 
-document.getElementById('prevPage').addEventListener('click', () => { if (page > 0) { page--; render(); } });
-document.getElementById('nextPage').addEventListener('click', () => {
-  if ((page + 1) * PAGE_SIZE < filtered.length) { page++; render(); }
-});
+    const lineaSel = document.getElementById('filterLinea');
+    lineaSel.innerHTML = ['Todas', ...allLineas].map(l => `<option value="${l}">${l}</option>`).join('');
+    lineaSel.addEventListener('change', e => { state.linea = e.target.value; render(); });
 
-function badge(estado) {
-  if (estado === 'No indexado') return `<span class="badge no-indexado">No indexado</span>`;
-  if (estado === 'Catálogo') return `<span class="badge catalogo">Catálogo</span>`;
-  if (estado === 'Oferta comercial (precio/stock)') return `<span class="badge oferta">Oferta</span>`;
-  return estado || '—';
-}
+    const chipWrap = document.getElementById('aliadoChips');
+    chipWrap.innerHTML = allAliados.map(a => `<span class="chip" data-aliado="${a}">${a}</span>`).join('');
+    chipWrap.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const a = chip.dataset.aliado;
+        if(state.aliados.has(a)) state.aliados.delete(a); else state.aliados.add(a);
+        chip.classList.toggle('active');
+        render();
+      });
+    });
 
-function renderDesglose() {
-  const filtroLinea = document.getElementById('filtroLineaDesglose').value;
-  let data = filtroLinea ? desgloseData.filter(d => d.linea === filtroLinea) : desgloseData;
+    const slider = document.getElementById('thresholdSlider');
+    slider.addEventListener('input', e => {
+      state.threshold = Number(e.target.value);
+      document.getElementById('thresholdVal').textContent = `${state.threshold} días`;
+      render();
+    });
 
-  data = [...data].sort((a, b) => {
-    const va = a[sortKeyDesglose], vb = b[sortKeyDesglose];
-    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sortDirDesglose;
-    return String(va).localeCompare(String(vb)) * sortDirDesglose;
-  });
+    document.getElementById('searchInput').addEventListener('input', e => {
+      state.search = e.target.value.trim().toLowerCase();
+      render();
+    });
 
-  document.getElementById('tbodyDesglose').innerHTML = data.map(d => `
-    <tr>
-      <td>${d.linea}</td>
-      <td>${d.aliado}</td>
-      <td>${d.total.toLocaleString('es-CO')}</td>
-      <td>${d.no_actualizados.toLocaleString('es-CO')}</td>
-    </tr>
-  `).join('');
-}
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      state = { linea:'Todas', aliados: new Set(), threshold: 7, search:'' };
+      lineaSel.value = 'Todas';
+      chipWrap.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      slider.value = 7;
+      document.getElementById('thresholdVal').textContent = '7 días';
+      document.getElementById('searchInput').value = '';
+      render();
+    });
+  }
 
-function render() {
-  const tbody = document.getElementById('tbody');
-  const start = page * PAGE_SIZE;
-  const pageRows = filtered.slice(start, start + PAGE_SIZE);
+  function filteredRows(){
+    return RAW.filter(r => {
+      if(state.linea !== 'Todas' && r.linea !== state.linea) return false;
+      if(state.aliados.size > 0 && !state.aliados.has(r.aliado)) return false;
+      if(state.search){
+        const hay = `${r.product_name} ${r.aliado}`.toLowerCase();
+        if(!hay.includes(state.search)) return false;
+      }
+      return true;
+    });
+  }
 
-  tbody.innerHTML = pageRows.map(r => `
-    <tr>
-      <td>${r.product_id ?? ''}</td>
-      <td>${r.product_name ?? '—'}</td>
-      <td>${r.linea ?? '—'}</td>
-      <td>${r.aliado ?? '—'}</td>
-      <td>${badge(r.que_se_actualizo)}</td>
-      <td>${r.fecha_ultima_actualizacion ?? '—'}</td>
-      <td>${r.dias_desde_ultima_actualizacion ?? '—'}</td>
-      <td>${r.is_active === 1 ? 'Sí' : (r.is_active === 0 ? 'No' : '—')}</td>
-      <td>${r.is_visible === 1 ? 'Sí' : (r.is_visible === 0 ? 'No' : '—')}</td>
-    </tr>
-  `).join('');
+  // Usa 'dias' ya calculado por SQL — no recalcula fechas en el navegador.
+  // Los "No indexado" (sin fecha) siempre caen en 'stale'.
+  function freshness(r){
+    if(r.noIndexado || r.dias === null || r.dias === undefined) return 'stale';
+    if(r.dias <= state.threshold) return 'fresh';
+    if(r.dias <= state.threshold * 2) return 'aging';
+    return 'stale';
+  }
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  document.getElementById('pageInfo').textContent = `Página ${page + 1} de ${totalPages} — ${filtered.length.toLocaleString('es-CO')} resultados`;
-  document.getElementById('prevPage').disabled = page === 0;
-  document.getElementById('nextPage').disabled = (page + 1) >= totalPages;
-}
+  let chartLinea, chartAliado;
+
+  function render(){
+    const rows = filteredRows();
+
+    const total = rows.length;
+    const aliadosCount = new Set(rows.map(r => r.aliado)).size;
+    const freshCount = rows.filter(r => freshness(r) === 'fresh').length;
+    const staleCount = rows.filter(r => freshness(r) === 'stale').length;
+    const noIndexadoCount = rows.filter(r => r.noIndexado).length;
+
+    document.getElementById('kpiTotal').innerHTML = total;
+    document.getElementById('kpiAliados').innerHTML = aliadosCount;
+    document.getElementById('kpiFresco').innerHTML = total ? Math.round(freshCount/total*100) + '<small>%</small>' : '—';
+    document.getElementById('kpiFrescoSub').textContent = `${freshCount} de ${total} productos`;
+    document.getElementById('kpiStale').innerHTML = staleCount;
+    document.getElementById('kpiStaleSub').textContent = `más de ${state.threshold*2} días sin cambios`;
+    document.getElementById('kpiAliadosSub').textContent = state.linea === 'Todas' ? 'todas las líneas' : state.linea;
+    document.getElementById('kpiTotalSub').textContent = state.aliados.size ? `${state.aliados.size} aliado(s) seleccionados` : 'todos los aliados';
+    document.getElementById('kpiNoIndexado').innerHTML = noIndexadoCount;
+    document.getElementById('kpiNoIndexadoSub').textContent = total ? Math.round(noIndexadoCount/total*100) + '% del filtro actual' : '';
+
+    renderCharts(rows);
+    renderRanking(rows);
+    renderProducts(rows);
+  }
+
+  function groupCount(rows, key){
+    const map = new Map();
+    rows.forEach(r => map.set(r[key], (map.get(r[key])||0) + 1));
+    return [...map.entries()].sort((a,b) => b[1]-a[1]);
+  }
+
+  function renderCharts(rows){
+    const lineaData = groupCount(rows, 'linea');
+    const aliadoData = groupCount(rows, 'aliado');
+
+    const baseOpts = {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:'#8fa3ae', font:{ family:'IBM Plex Mono', size:11 } }, grid:{ color:'#26323b' } },
+        y:{ beginAtZero:true, ticks:{ color:'#8fa3ae', precision:0 }, grid:{ color:'#26323b' } }
+      }
+    };
+
+    if(chartLinea) chartLinea.destroy();
+    chartLinea = new Chart(document.getElementById('chartLinea'), {
+      type:'bar',
+      data:{ labels: lineaData.map(d=>d[0]), datasets:[{ data: lineaData.map(d=>d[1]), backgroundColor: COLORS.lineA, borderRadius:2, maxBarThickness: 46 }] },
+      options: baseOpts
+    });
+
+    if(chartAliado) chartAliado.destroy();
+    chartAliado = new Chart(document.getElementById('chartAliado'), {
+      type:'bar',
+      data:{ labels: aliadoData.map(d=>d[0]), datasets:[{ data: aliadoData.map(d=>d[1]), backgroundColor: COLORS.lineB, borderRadius:2, maxBarThickness: 36 }] },
+      options: {
+        ...baseOpts,
+        indexAxis: aliadoData.length > 6 ? 'y' : 'x',
+        scales: aliadoData.length > 6 ? {
+          x:{ beginAtZero:true, ticks:{ color:'#8fa3ae', precision:0 }, grid:{ color:'#26323b' } },
+          y:{ ticks:{ color:'#8fa3ae', font:{ family:'IBM Plex Mono', size:11 } }, grid:{ display:false } }
+        } : baseOpts.scales
+      }
+    });
+  }
+
+  function renderRanking(rows){
+    const byAliado = new Map();
+    rows.forEach(r => {
+      if(!byAliado.has(r.aliado)) byAliado.set(r.aliado, []);
+      byAliado.get(r.aliado).push(r);
+    });
+
+    const stats = [...byAliado.entries()].map(([aliado, list]) => {
+      const fresh = list.filter(r => freshness(r) === 'fresh').length;
+      const stale = list.filter(r => freshness(r) === 'stale').length;
+      const lastDate = list.reduce((max, r) => (r.fecha && (!max || r.fecha > max)) ? r.fecha : max, null);
+      const conFecha = list.filter(r => r.dias !== null && r.dias !== undefined);
+      const avgAge = conFecha.length ? Math.round(conFecha.reduce((s,r)=>s+r.dias,0) / conFecha.length) : null;
+      return { aliado, total: list.length, fresh, stale, pct: Math.round(fresh/list.length*100), lastDate, avgAge };
+    }).sort((a,b) => b.pct - a.pct || b.total - a.total);
+
+    const body = document.getElementById('rankingBody');
+    if(stats.length === 0){
+      body.innerHTML = `<tr><td colspan="8" class="empty">No hay aliados para los filtros actuales.</td></tr>`;
+      return;
+    }
+    body.innerHTML = stats.map((s, i) => {
+      const barColor = s.pct >= 66 ? COLORS.fresh : s.pct >= 33 ? COLORS.aging : COLORS.stale;
+      return `
+        <tr>
+          <td class="rank-num mono">${i+1}</td>
+          <td>${s.aliado}</td>
+          <td class="num mono">${s.total}</td>
+          <td>
+            <span class="bar-track"><span class="bar-fill" style="width:${s.pct}%;background:${barColor}"></span></span>
+            <span class="mono">${s.pct}%</span>
+          </td>
+          <td class="num mono">${s.fresh}</td>
+          <td class="num mono">${s.stale}</td>
+          <td class="mono">${fmtDate(s.lastDate)}</td>
+          <td class="num mono">${s.avgAge ?? '—'}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function renderProducts(rows){
+    const sorted = [...rows].sort((a,b) => (b.fecha||0) - (a.fecha||0));
+    const body = document.getElementById('productsBody');
+    if(sorted.length === 0){
+      body.innerHTML = `<tr><td colspan="7" class="empty">No hay productos para los filtros actuales.</td></tr>`;
+      return;
+    }
+    const dotColor = { fresh: COLORS.fresh, aging: COLORS.aging, stale: COLORS.stale };
+    const label = { fresh: 'Al día', aging: 'Por vencer', stale: 'Desactualizado' };
+    body.innerHTML = sorted.map(r => {
+      const st = freshness(r);
+      const activoPill = r.is_active === 1 ? '<span class="pill si">Sí</span>'
+        : r.is_active === 0 ? '<span class="pill no">No</span>'
+        : '—';
+      return `
+        <tr>
+          <td>${r.product_name}</td>
+          <td>${r.aliado}</td>
+          <td>${r.linea}</td>
+          <td>${r.que_se_actualizo || '—'}</td>
+          <td class="mono">${fmtDate(r.fecha)}</td>
+          <td>${activoPill}</td>
+          <td><span class="status-dot" style="background:${dotColor[st]}"></span>${label[st]}</td>
+        </tr>`;
+    }).join('');
+  }
+})();
 </script>
-
 </body>
 </html>
